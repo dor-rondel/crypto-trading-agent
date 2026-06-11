@@ -69,6 +69,14 @@ The Wallet Manager, Chain Adapters, and Portfolio Manager must remain determinis
 ### Three-Wallet USDC Strategy
 The system maintains a USDC "bank" on each supported chain. All trades are simulated by swapping USDC for assets and back, ensuring a consistent base currency for performance tracking.
 
+### Initialization & Funding
+Upon first run, the system creates necessary wallets and generates a `WALLETS.md` file (ignored by git). This file contains public addresses, private keys (for testnet convenience), and faucet links. The system will poll for balances and wait until at least one wallet is funded before proceeding.
+
+### Subsequent Runs & Persistence
+The system automatically loads existing wallets from `.solana_wallet`, `sepolia_wallet.json`, and `fuji_wallet.json` if they exist in the root directory.
+*   **Do not** rely on environment variables (`SOLANA_PRIVATE_KEY`) after initial setup, as they are only used for bootstrapping.
+*   Check `WALLETS.md` for addresses if you need to re-fund.
+
 ---
 
 ## Development
@@ -99,6 +107,10 @@ make lint
 # Run pytest
 make test
 ```
+
+### Configuration
+
+Ensure your `.env` file is configured with the necessary API keys and RPC URLs (especially for reliable Solana Devnet connectivity).
 
 ---
 

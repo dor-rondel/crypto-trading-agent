@@ -57,9 +57,13 @@ The system maintains three distinct wallets, one for each supported chain.
 
 ### Programmatic Wallet Creation & Persistence
 Wallets should be loaded from environment variables. If not found, they must be created programmatically.
-- **EVM:** `AgentKit/CDP` handles wallet persistence. Credentials should be stored in `.env`.
-- **Solana:** The system must generate a keypair if one is not provided in `.env` and store the private key/seed phrase for future sessions.
-- **Initialization:** Upon creation, the system should output the wallet addresses for manual funding via testnet faucets (Native gas and USDC).
+- **EVM:** `AgentKit/CDP` handles wallet persistence. Credentials should be stored in `.env` (API Keys) and wallet data in `*_wallet.json` files.
+- **Solana:** The system must generate a keypair if one is not provided in `.env` and store it in a `.solana_wallet` file for future sessions.
+
+### Initialization: Two-Stage Polling
+The system operates in two distinct polling stages during startup:
+1. **Stage 1: Funding Poll:** The main script polls for native/USDC balances. It will wait indefinitely until at least one wallet is funded. Instructions are provided in `WALLETS.md`.
+2. **Stage 2: Market Poll:** Once funds are detected, the system enters its active loop, polling market data providers for signals to trigger the Planner Agent.
 
 ### Security
 - Agents never see private keys.
