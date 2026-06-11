@@ -5,8 +5,11 @@
 This repository contains an event-driven, agentic trading simulation platform.
 
 The system trades exclusively on testnets while using real market data to generate signals.
+The primary LLM provider is **Groq** for high-speed inference.
+**LangSmith** is used for workflow observability and tracing.
 
 Supported chains:
+...
 
 - Solana Devnet
 - Ethereum Sepolia
@@ -26,21 +29,22 @@ The system follows a strict separation between planning and execution.
 
 ### Agents Generate Plans
 
-Agents produce structured output.
+Agents produce structured output using Pydantic models to ensure validation and type safety.
 
-Example:
+Example Plan Model:
 
-```json
-{
-  "plan_type": "trade",
-  "actions": [
-    {
-      "action": "BUY",
-      "asset": "ETH",
-      "allocation_pct": 0.1
-    }
-  ]
-}
+```python
+from pydantic import BaseModel, Field
+from typing import List
+
+class Action(BaseModel):
+    action: str = Field(..., description="BUY or SELL")
+    asset: str = Field(..., description="Asset symbol e.g. ETH")
+    allocation_pct: float = Field(..., ge=0, le=1)
+
+class TradePlan(BaseModel):
+    plan_type: str = "trade"
+    actions: List[Action]
 ```
 
 ### Executors Execute Plans
@@ -48,6 +52,17 @@ Example:
 Executors perform blockchain operations.
 
 Executors must never generate strategy decisions.
+
+---
+
+## Wallet Management
+
+Wallets are managed via environment variables for testnet operations.
+Deterministic services (Executors) read private keys from `.env`.
+
+- Agents never see private keys.
+- Private keys must never be logged or committed.
+- Wallets are strictly for testnet use.
 
 ---
 

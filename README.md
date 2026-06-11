@@ -19,6 +19,8 @@ The architecture is intentionally designed around:
 - Persistent workflow state
 - Deterministic execution services
 - Agentic decision making only where reasoning is required
+- **Groq** for high-speed LLM inference
+- **LangSmith** for deep observability and tracing
 
 ---
 
@@ -39,7 +41,8 @@ The architecture is intentionally designed around:
 
 - LangGraph
 - LangChain
-- OpenAI Models
+- **Groq** (via LangChain-Groq)
+- **LangSmith** (for observability)
 - Coinbase AgentKit
 
 ### Blockchain
@@ -97,18 +100,15 @@ Portfolio Manager
 
 ### Plan First, Execute Second
 
-Agents do not execute trades directly.
+Agents do not execute trades directly. They generate structured plans using **Pydantic** models to ensure strict schema validation before execution.
 
-Agents generate structured plans.
+Example Schema:
 
-Example:
-
-```json
-{
-  "action": "BUY",
-  "asset": "ETH",
-  "allocation_pct": 0.1
-}
+```python
+class TradePlan(BaseModel):
+    action: str  # BUY/SELL
+    asset: str
+    allocation_pct: float
 ```
 
 Executors are responsible for carrying out plans.
@@ -145,42 +145,45 @@ The following components must remain deterministic:
 
 These services must not contain LLM reasoning.
 
-### Agent Decision Points
+### Wallet Management
 
-Agents are only invoked when reasoning is required.
-
-Examples:
-
-- Strategy generation
-- Position sizing
-- Recovery planning
-- Portfolio rebalancing
+Private keys are stored in environment variables (`.env`) and are strictly used by deterministic executors. Agents never have access to wallet secrets.
 
 ---
 
 ## Development
 
+### Prerequisites
+
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv)
+- `libffi-dev` (required for `cffi` build)
+
 ### Install
 
 ```bash
+# Install dependencies and setup virtual environment
 make install
 ```
 
 ### Run Quality Checks
 
 ```bash
+# Run ruff, pylint, and mypy
 make lint
 ```
 
 ### Run Tests
 
 ```bash
+# Run pytest
 make test
 ```
 
 ### Run Full Validation
 
 ```bash
+# Run all checks (format, lint, test, spell)
 make check
 ```
 
@@ -192,6 +195,7 @@ All code must:
 
 - Pass Ruff
 - Pass Pylint
+- Pass Mypy
 - Pass Pytest
 - Pass Codespell
 

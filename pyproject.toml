@@ -1,0 +1,55 @@
+[project]
+name = "crypto-trading-agent"
+version = "0.1.0"
+description = "Event-driven, agentic trading simulation platform."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph",
+    "langchain",
+    "langchain-groq",
+    "langsmith",
+    "coinbase-agentkit",
+    "solana",
+    "web3",
+    "pydantic",
+    "python-dotenv",
+    "httpx>=0.28.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pylint",
+    "pytest",
+    "codespell",
+    "pytest-asyncio>=1.4.0",
+    "mypy>=2.1.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.pylint]
+max-line-length = 88
+disable = [
+    "C0114", # missing-module-docstring (already required by GEMINI.md, but let's keep it clean)
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
