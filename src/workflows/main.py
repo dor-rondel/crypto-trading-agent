@@ -4,9 +4,10 @@ Initializes services and orchestrates the Plan → Validate → Execute flow.
 """
 
 import time
-from typing import Annotated, TypedDict, Dict
+from typing import Annotated, Dict, TypedDict
 
 from langgraph.graph import END, StateGraph
+
 from src.services.wallet_manager import WalletManager
 
 
@@ -61,7 +62,10 @@ def wait_for_funding(wallet_manager: WalletManager) -> Dict[str, Dict[str, float
         
         print("\n--- Current Portfolio Status ---")
         for network, assets in balances.items():
-            print(f"[{network.upper()}] Native: {assets['native']:.4f} | USDC: {assets['usdc']:.2f}")
+            print(
+                f"[{network.upper()}] Native: {assets['native']:.4f} | "
+                f"USDC: {assets['usdc']:.2f}"
+            )
             if assets['native'] > 0 or assets['usdc'] > 0:
                 has_funds = True
         
