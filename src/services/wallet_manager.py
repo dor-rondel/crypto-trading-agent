@@ -20,6 +20,7 @@ load_dotenv()
 # Solana Devnet USDC Mint
 SOLANA_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 
+
 class WalletManager:
     """
     Orchestrates wallet lifecycle across supported chains.
@@ -53,7 +54,7 @@ class WalletManager:
         """
         private_key_str = os.getenv("SOLANA_PRIVATE_KEY")
         wallet_file = ".solana_wallet"
-        
+
         if private_key_str:
             try:
                 keypair = Keypair.from_bytes(base58.b58decode(private_key_str))
@@ -83,23 +84,23 @@ class WalletManager:
         try:
             api_key_name = os.getenv("CDP_API_KEY_NAME")
             raw_key = os.getenv("CDP_API_KEY_PRIVATE_KEY", "").replace("\\n", "\n")
-            
+
             wallet_secret = None
             if os.path.exists(data_file):
                 with open(data_file, "r") as f:
                     data = json.load(f)
                     wallet_secret = data.get("wallet_secret")
-            
+
             config = CdpEvmWalletProviderConfig(
                 api_key_id=api_key_name,
                 api_key_secret=raw_key,
                 network_id=network_id,
-                wallet_secret=wallet_secret
+                wallet_secret=wallet_secret,
             )
-            
+
             provider = CdpEvmWalletProvider(config)
             self.wallets[network_id] = provider
-            
+
         except Exception:
             # We fail silently here but the balance check will catch missing wallets
             pass
@@ -111,28 +112,30 @@ class WalletManager:
         info = "# Wallet Information & Funding Instructions\n\n"
         info += "Use the following addresses to fund your wallets "
         info += "with testnet Native tokens and USDC.\n\n"
-        
+
         # Solana
         sol_kp = self.wallets.get("solana")
         sol_addr = sol_kp.pubkey() if sol_kp else "ERROR"
         sol_priv = base58.b58encode(bytes(sol_kp)).decode() if sol_kp else "ERROR"
-        
+
         info += "### Solana Devnet\n"
         info += f"- **Address:** `{sol_addr}`\n"
         info += f"- **Private Key:** `{sol_priv}`\n"
         info += "- **Faucet:** [Solana Faucet](https://faucet.solana.com/)\n\n"
-        
+
         # EVM
         for network in ["sepolia", "avalanche-fuji"]:
             provider = self.wallets.get(network)
             addr = provider.get_address() if provider else "ERROR"
             info += f"### {network.capitalize()}\n"
             info += f"- **Address:** `{addr}`\n"
-            info += "- **Faucet:** [Coinbase Faucet](https://www.coinbase.com/faucets)\n\n"
-        
+            info += (
+                "- **Faucet:** [Coinbase Faucet](https://www.coinbase.com/faucets)\n\n"
+            )
+
         info += "---\n"
         info += "*Note: Private keys are included here for testnet convenience.*\n"
-        
+
         with open("WALLETS.md", "w") as f:
             f.write(info)
 
@@ -141,7 +144,7 @@ class WalletManager:
         Fetches balances for all wallets.
         """
         balances = {}
-        
+
         # Solana Balance
         if "solana" in self.wallets:
             try:
@@ -151,8 +154,7 @@ class WalletManager:
                 # USDC Balance
                 usdc_pubkey = Pubkey.from_string(SOLANA_USDC_MINT)
                 token_accounts = self.solana_client.get_token_accounts_by_owner(
-                    kp.pubkey(),
-                    TokenAccountOpts(mint=usdc_pubkey)
+                    kp.pubkey(), TokenAccountOpts(mint=usdc_pubkey)
                 )
 
                 usdc_balance = 0.0
@@ -177,11 +179,12 @@ class WalletManager:
                     native_balance = float(provider.get_balance()) / 10**18
                     # AgentKit provider doesn't have a direct USDC balance helper yet
                     # For now, we stub it as 0 unless we implement a contract call
-                    balances[network] = {"native": native_balance, "usdc": 0.0} 
+                    balances[network] = {"native": native_balance, "usdc": 0.0}
                 except Exception:
                     balances[network] = {"native": 0.0, "usdc": 0.0}
-        
+
         return balances
+
 
 if __name__ == "__main__":
     manager = WalletManager()

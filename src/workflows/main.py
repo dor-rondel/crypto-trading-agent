@@ -59,20 +59,20 @@ def wait_for_funding(wallet_manager: WalletManager) -> Dict[str, Dict[str, float
     while True:
         balances = wallet_manager.get_balances()
         has_funds = False
-        
+
         print("\n--- Current Portfolio Status ---")
         for network, assets in balances.items():
             print(
                 f"[{network.upper()}] Native: {assets['native']:.4f} | "
                 f"USDC: {assets['usdc']:.2f}"
             )
-            if assets['native'] > 0 or assets['usdc'] > 0:
+            if assets["native"] > 0 or assets["usdc"] > 0:
                 has_funds = True
-        
+
         if has_funds:
             print("\n✅ Funds detected! Proceeding to trading workflow...")
             return balances
-        
+
         print("\n⏳ No funds detected. Please fund your wallets.")
         print("📖 Instructions: Check WALLETS.md for addresses and faucet links.")
         print("🔄 Retrying in 30 seconds...")
@@ -96,16 +96,14 @@ app = workflow.compile()
 
 if __name__ == "__main__":
     print("🚀 Initializing Crypto Trading Agent...")
-    
+
     # Initialize Wallet Manager (silently)
     wallet_manager = WalletManager()
-    
+
     # Wait for funds before starting the agentic workflow
     balances = wait_for_funding(wallet_manager)
-    
+
     # Start the workflow with initial state
-    app.invoke({
-        "messages": ["Start trading"],
-        "portfolio_balances": balances,
-        "next_step": ""
-    })
+    app.invoke(
+        {"messages": ["Start trading"], "portfolio_balances": balances, "next_step": ""}
+    )
