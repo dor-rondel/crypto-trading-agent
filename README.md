@@ -6,21 +6,11 @@ This project is an event-driven, agentic cryptocurrency trading simulation platf
 
 The system executes simulated trading strategies against:
 
-- Solana Devnet
-- Ethereum Sepolia
-- Avalanche Fuji
+- **Solana Devnet** (via `solana-py`)
+- **Ethereum Sepolia** (via `AgentKit/CDP`)
+- **Avalanche Fuji** (via `AgentKit/CDP`)
 
-Real market data is used to generate trading signals, while all trade execution occurs on testnets to avoid risking real capital.
-
-The architecture is intentionally designed around:
-
-- Plan → Validate → Execute workflows
-- Event-driven orchestration
-- Persistent workflow state
-- Deterministic execution services
-- Agentic decision making only where reasoning is required
-- **Groq** for high-speed LLM inference
-- **LangSmith** for deep observability and tracing
+Real market data is used to generate trading signals, while all trade execution occurs on testnets using a **three-wallet USDC strategy** to avoid risking real capital.
 
 ---
 
@@ -31,7 +21,6 @@ The architecture is intentionally designed around:
 - Test autonomous trading workflows
 - Support long-running blockchain operations
 - Maintain reproducibility and auditability
-- Enable future backtesting and strategy comparison
 
 ---
 
@@ -43,20 +32,18 @@ The architecture is intentionally designed around:
 - LangChain
 - **Groq** (via LangChain-Groq)
 - **LangSmith** (for observability)
-- Coinbase AgentKit
+- **Coinbase AgentKit** (for EVM execution)
 
 ### Blockchain
 
-- Solana Python SDK
-- web3.py
-- Avalanche-compatible EVM tooling
+- **Solana Python SDK** (`solana-py`)
+- **Coinbase CDP SDK**
+- **web3.py** (for deterministic validations)
 
 ### Infrastructure
 
 - Python 3.12+
-- PostgreSQL
-- Redis (future)
-- Docker (future)
+- PostgreSQL (for workflow persistence)
 
 ---
 
@@ -64,90 +51,23 @@ The architecture is intentionally designed around:
 
 ### High-Level Flow
 
-Market Watcher
-
-↓
-
-Signal Generated
-
-↓
-
-Planner Agent
-
-↓
-
-Structured Plan
-
-↓
-
-Validator
-
-↓
-
-Executor
-
-↓
-
-Transaction Monitor
-
-↓
-
-Portfolio Manager
+Market Watcher → Signal Generated → Planner Agent → Structured Plan → Validator → Executor → Transaction Monitor → Portfolio Manager
 
 ---
 
 ## Design Principles
 
 ### Plan First, Execute Second
-
-Agents do not execute trades directly. They generate structured plans using **Pydantic** models to ensure strict schema validation before execution.
-
-Example Schema:
-
-```python
-class TradePlan(BaseModel):
-    action: str  # BUY/SELL
-    asset: str
-    allocation_pct: float
-```
-
-Executors are responsible for carrying out plans.
-
-This improves:
-
-- testability
-- reproducibility
-- observability
-- debugging
+Agents generate structured plans using **Pydantic** models. Executors are responsible for carrying out these plans deterministically.
 
 ### Event-Driven Workflows
-
-Workflows are resumed by events.
-
-Examples:
-
-- Transaction confirmed
-- Transaction failed
-- Bridge completed
-- Market signal generated
-
-Workflows should never remain active while waiting.
+Workflows are state machines resumed by events (e.g., `TX_CONFIRMED`, `MARKET_SIGNAL`). They persist state and do not remain active while waiting.
 
 ### Deterministic Services
+The Wallet Manager, Chain Adapters, and Portfolio Manager must remain deterministic and free of LLM reasoning.
 
-The following components must remain deterministic:
-
-- Wallet Manager
-- Chain Adapters
-- Transaction Monitor
-- Portfolio Manager
-- Capital Reservation Manager
-
-These services must not contain LLM reasoning.
-
-### Wallet Management
-
-Private keys are stored in environment variables (`.env`) and are strictly used by deterministic executors. Agents never have access to wallet secrets.
+### Three-Wallet USDC Strategy
+The system maintains a USDC "bank" on each supported chain. All trades are simulated by swapping USDC for assets and back, ensuring a consistent base currency for performance tracking.
 
 ---
 
@@ -180,61 +100,26 @@ make lint
 make test
 ```
 
-### Run Full Validation
-
-```bash
-# Run all checks (format, lint, test, spell)
-make check
-```
-
----
-
-## Code Quality Requirements
-
-All code must:
-
-- Pass Ruff
-- Pass Pylint
-- Pass Mypy
-- Pass Pytest
-- Pass Codespell
-
-All classes require docstrings.
-
-All public functions require docstrings.
-
-Complex workflows require architecture comments.
-
 ---
 
 ## Future Roadmap
 
-### Phase 1
+### Phase 1: Foundation
+- Multi-chain Wallet Manager
+- Chain Adapters (Solana & EVM)
+- Market Watcher
 
-- Market watcher
-- Planner agent
-- Executor
-- Solana support
-- Sepolia support
-- Fuji support
+### Phase 2: Agentic Trading
+- Planner Agent (Groq)
+- Deterministic Validator
+- Executor Service
 
-### Phase 2
+### Phase 3: Orchestration
+- Persistent Workflow State (PostgreSQL)
+- Portfolio & Capital Reservation
+- Transaction Monitoring
 
-- Portfolio management
-- Capital reservation
-- Recovery workflows
-- Persistent workflow storage
-
-### Phase 3
-
+### Phase 4: Advanced Features
+- Backtesting Engine
+- Strategy Benchmarking
 - Multi-strategy support
-- Backtesting
-- Strategy comparison
-- Performance analytics
-
-### Phase 4
-
-- CI/CD
-- Container deployment
-- Distributed workers
-- Production observability

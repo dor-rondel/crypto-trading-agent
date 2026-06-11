@@ -9,26 +9,19 @@ The primary LLM provider is **Groq** for high-speed inference.
 **LangSmith** is used for workflow observability and tracing.
 
 Supported chains:
-...
-
-- Solana Devnet
-- Ethereum Sepolia
-- Avalanche Fuji
-
-Future chains may be added.
+- Solana Devnet (`solana-py`)
+- Ethereum Sepolia (`AgentKit/CDP`)
+- Avalanche Fuji (`AgentKit/CDP`)
 
 ---
 
 # Architectural Constraints
-
-These constraints are intentional and should not be modified without discussion.
 
 ## Plan → Validate → Execute
 
 The system follows a strict separation between planning and execution.
 
 ### Agents Generate Plans
-
 Agents produce structured output using Pydantic models to ensure validation and type safety.
 
 Example Plan Model:
@@ -48,267 +41,125 @@ class TradePlan(BaseModel):
 ```
 
 ### Executors Execute Plans
-
 Executors perform blockchain operations.
-
-Executors must never generate strategy decisions.
+- **EVM Chains:** Use `AgentKit` and the `Coinbase CDP SDK` for swaps and wallet management. `web3.py` may be used for low-level deterministic checks.
+- **Solana:** Use `solana-py` for transaction construction and signing.
+- Executors must never generate strategy decisions.
 
 ---
 
-## Wallet Management
+## Wallet Management & Capital
 
-Wallets are managed via environment variables for testnet operations.
-Deterministic services (Executors) read private keys from `.env`.
+### Three-Wallet Strategy
+The system maintains three distinct wallets, one for each supported chain.
+- Each wallet uses **USDC** as its base "bank" currency.
+- Trades are simulated by swapping USDC for the target asset and back.
 
+### Programmatic Wallet Creation & Persistence
+Wallets should be loaded from environment variables. If not found, they must be created programmatically.
+- **EVM:** `AgentKit/CDP` handles wallet persistence. Credentials should be stored in `.env`.
+- **Solana:** The system must generate a keypair if one is not provided in `.env` and store the private key/seed phrase for future sessions.
+- **Initialization:** Upon creation, the system should output the wallet addresses for manual funding via testnet faucets (Native gas and USDC).
+
+### Security
 - Agents never see private keys.
-- Private keys must never be logged or committed.
+- Private keys/CDP credentials must never be logged or committed.
 - Wallets are strictly for testnet use.
 
 ---
 
 ## No Agent-Driven Transaction Construction
-
-Agents may propose actions.
-
-Agents may not:
-
-- Construct raw transactions
-- Sign transactions
-- Directly manage wallets
-
-These responsibilities belong to deterministic services.
+Agents propose actions; deterministic services (using AgentKit or solana-py) construct and sign transactions.
 
 ---
 
 ## Event-Driven Architecture
-
 The system is not request-response driven.
-
-Workflows are resumed through events.
-
-Examples:
-
-- MARKET_SIGNAL
-- TX_CONFIRMED
-- TX_FAILED
-- BRIDGE_COMPLETED
-
+Workflows are resumed through events (MARKET_SIGNAL, TX_CONFIRMED, TX_FAILED, etc.).
 Workflows should persist state and sleep while waiting.
 
 ---
 
 ## Workflow Philosophy
-
 A workflow is not a continuously running agent.
-
-A workflow is a state machine.
-
-Example:
-
-Start
-
-↓
-
-Generate Plan
-
-↓
-
-Validate
-
-↓
-
-Execute
-
-↓
-
-Wait
-
-↓
-
-Resume
-
-↓
-
-Complete
+A workflow is a state machine: Start → Generate Plan → Validate → Execute → Wait → Resume → Complete.
 
 ---
 
 # Component Responsibilities
 
-## Market Watcher
-
+## Wallet Manager
 Responsibilities:
+- Programmatically create/load wallets for all three chains.
+- Fetch balances for native tokens and USDC.
+- Provide wallet addresses for funding.
 
-- Poll market data providers
-- Detect trading signals
-- Emit events
-
-Must not execute trades.
-
-Must not modify portfolios.
-
----
+## Market Watcher
+Responsibilities:
+- Poll market data providers (e.g., CoinGecko, Binance).
+- Detect trading signals and emit events.
+Must not execute trades or modify portfolios.
 
 ## Planner Agent
-
 Responsibilities:
-
-- Analyze market state
-- Analyze portfolio state
-- Generate plans
-
-Must not perform execution.
-
-Must not sign transactions.
-
----
+- Analyze market state and portfolio state.
+- Generate plans using structured output.
+Must not perform execution or sign transactions.
 
 ## Validator
-
 Responsibilities:
-
-- Verify balances
-- Verify wallet availability
-- Verify position limits
-- Verify chain health
-
+- Verify balances, wallet availability, position limits, and chain health.
 Must remain deterministic.
 
----
-
 ## Executor
-
 Responsibilities:
-
-- Execute plans
-- Submit transactions
-- Track transaction identifiers
-
+- Execute plans and submit transactions.
+- Track transaction identifiers.
 Must not create strategy.
 
----
-
 ## Transaction Monitor
-
 Responsibilities:
-
-- Poll chain state
-- Verify confirmations
-- Verify failures
-- Emit workflow events
-
+- Poll chain state and verify confirmations/failures.
+- Emit workflow events.
 Must not contain LLM logic.
 
----
-
 ## Portfolio Manager
-
 Responsibilities:
-
-- Track balances
-- Track positions
-- Track reserved capital
-- Track workflow ownership
-
+- Track balances, positions, reserved capital, and workflow ownership.
 Must remain deterministic.
 
 ---
 
 # Multi-Workflow Execution
-
-Multiple workflows may execute simultaneously.
-
-Example:
-
-Workflow A
-
-- Buy ETH
-
-Workflow B
-
-- Buy AVAX
-
-Workflow C
-
-- Bridge SOL
-
-The system must support concurrent execution.
+Multiple workflows may execute simultaneously (e.g., Workflow A buys ETH, Workflow B buys AVAX). The system must support concurrent execution.
 
 ---
 
 # Capital Reservation
-
-Before execution, workflows reserve funds.
-
-Example:
-
-Available USDC: 100
-
-Workflow A reserves: 80
-
-Available balance becomes: 20
-
-Subsequent workflows must respect reservations.
-
-This prevents race conditions.
+Before execution, workflows reserve funds to prevent race conditions. Subsequent workflows must respect these reservations.
 
 ---
 
 # Persistence Requirements
-
-Workflow state must be recoverable.
-
-Required persistence:
-
-- Workflow state
-- Pending transactions
-- Plans
-- Portfolio state
-- Reservations
-
-System restarts must not lose active workflows.
+Workflow state, pending transactions, plans, portfolio state, and reservations must be recoverable. System restarts must not lose active workflows.
 
 ---
 
 # Code Standards
-
-## Mandatory
-
-All public classes require docstrings.
-
-All public functions require docstrings.
-
-All modules require module-level docstrings.
-
-Type hints are required.
-
-Avoid untyped dictionaries where structured models are possible.
-
-Prefer:
-
-- dataclasses
-- pydantic models
-
-over generic dictionaries.
+- All public classes, functions, and modules require docstrings.
+- Type hints are required.
+- Use Pydantic models or dataclasses over generic dictionaries.
 
 ---
 
 # Testing Philosophy
-
-Every planner decision should be testable independently.
-
-The planner must be executable without blockchain access.
-
-The executor must be testable with mocked chain adapters.
-
-The transaction monitor must be testable with mocked chain responses.
-
-Favor deterministic tests.
+- Every planner decision must be testable independently without blockchain access.
+- Executors and monitors must be testable with mocked chain responses.
+- Favor deterministic tests.
 
 ---
 
 # Preferred Repository Structure
-
 ```text
 src/
 ├── agents/
@@ -325,14 +176,4 @@ src/
 ---
 
 # Future Direction
-
-Potential future features:
-
-- Portfolio rebalancing
-- Backtesting
-- Strategy benchmarking
-- Multiple planner models
-- Distributed workflow execution
-- Human approval workflows
-
-Future implementations should preserve the Plan → Validate → Execute architecture.
+- Portfolio rebalancing, backtesting, strategy benchmarking, multiple planner models, distributed execution, and human approval workflows.
