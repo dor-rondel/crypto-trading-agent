@@ -63,11 +63,14 @@ Agents generate structured plans using **Pydantic** models. Executors are respon
 ### Event-Driven Workflows
 Workflows are state machines resumed by events (e.g., `TX_CONFIRMED`, `MARKET_SIGNAL`). They persist state and do not remain active while waiting.
 
+### Unified Wallet Interface
+All multi-chain wallets inherit from the `BaseWallet` abstract class. This guarantees that every wallet implements identical interfaces for retrieving public addresses (`get_address() -> str`) and balances (`get_balances() -> Dict[str, float]`). The `WalletManager` acts as the orchestrator and holds strongly typed mappings of network IDs to these `BaseWallet` instances.
+
 ### Deterministic Services
 The Wallet Manager, Chain Adapters, and Portfolio Manager must remain deterministic and free of LLM reasoning.
 
 ### Three-Wallet USDC Strategy
-The system maintains a USDC "bank" on each supported chain. All trades are simulated by swapping USDC for assets and back, ensuring a consistent base currency for performance tracking.
+The system maintains a USDC "bank" on each supported chain. All trades are simulated by swapping USDC for assets and back, ensuring a consistent base currency for performance tracking. Solana balances are fetched from the devnet token account, and EVM balances are queried programmatically from the official Sepolia and Avalanche Fuji USDC token contract addresses using `read_contract` calls.
 
 ### Initialization & Funding
 Upon first run, the system creates necessary wallets and generates a `WALLETS.md` file (ignored by git). This file contains public addresses, private keys (for testnet convenience), and faucet links. The system will poll for balances and wait until at least one wallet is funded before proceeding.
@@ -97,7 +100,11 @@ make install
 ### Run Quality Checks
 
 ```bash
-# Run ruff, pylint, and mypy
+# Run comprehensive format check, ruff check, pylint, mypy, pytest, and codespell
+make check
+
+# Or run just formatting or linter checks individually
+make format
 make lint
 ```
 

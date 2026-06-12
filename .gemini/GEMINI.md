@@ -110,8 +110,8 @@ A workflow is a state machine: Start → Generate Plan → Validate → Execute 
 
 Responsibilities:
 
-- Programmatically create/load wallets for all three chains.
-- Fetch balances for native tokens and USDC.
+- Programmatically create/load wallets for all three chains. All wallets must implement the unified interface of `BaseWallet` (`src/services/base_wallet.py`).
+- Fetch balances for native tokens and USDC. EVM wallet balances must fetch real USDC balances via contract `read_contract` calls rather than returning 0.0 placeholders.
 - Provide wallet addresses for funding.
 
 ## Market Watcher
@@ -185,7 +185,8 @@ Workflow state, pending transactions, plans, portfolio state, and reservations m
 - All public classes, functions, and modules require docstrings.
 - Type hints are required.
 - Use Pydantic models or dataclasses over generic dictionaries.
-- **Mandatory Quality Checks:** Before finalizing any task, run `make lint`, `make format`, `make spell`, and `make test`. All quality checks must pass before reporting the task as complete.
+- **Standard Logging:** Use Python's standard `logging.getLogger(__name__)` library to trace initialization, RPC activities, and handle failures gracefully. Private keys or API secrets must never be logged.
+- **Mandatory Quality Checks:** Before finalizing any task, run `make check` (which comprehensively runs format checks, lints, type checks, unit tests, and spellchecks). All quality checks must pass before reporting the task as complete.
 
 ---
 
