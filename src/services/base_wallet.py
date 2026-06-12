@@ -18,7 +18,7 @@ class BaseWallet(ABC):
         """
 
     @abstractmethod
-    def get_balances(self) -> Dict[str, float]:
+    async def get_balances(self) -> Dict[str, float]:
         """
         Fetches the native and USDC balances for the wallet.
         """

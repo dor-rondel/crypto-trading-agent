@@ -21,7 +21,6 @@ def setup_logging(level: int = logging.INFO) -> None:
 
     # Set levels for noisy libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("openai").setLevel(logging.WARNING)
 
 
 if __name__ == "__main__":

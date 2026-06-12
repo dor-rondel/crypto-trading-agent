@@ -2,6 +2,7 @@
 Service for managing EVM-specific wallet operations.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -62,9 +63,15 @@ class EvmWallet(BaseWallet):
         self.data_file = data_file
         self.chain_id = chain_id
         self.rpc_url = rpc_url
-        self.provider = self._init_evm()
+        self.provider: Any = None
 
-    def _init_evm(self) -> Any:
+    async def initialize(self) -> None:
+        """
+        Asynchronously initializes the EVM provider.
+        """
+        self.provider = await self._init_evm()
+
+    async def _init_evm(self) -> Any:
         """
         Initializes an EVM wallet using Coinbase CDP or local key storage.
         """
@@ -73,7 +80,7 @@ class EvmWallet(BaseWallet):
             return self._init_custom_evm()
 
         # --- 2. HANDLE CDP CLOUD CHAINS (e.g., Sepolia) ---
-        return self._init_cdp_evm()
+        return await self._init_cdp_evm()
 
     def _init_custom_evm(self) -> EthAccountWalletProvider:
         """
@@ -139,7 +146,7 @@ class EvmWallet(BaseWallet):
         )
         return provider
 
-    def _init_cdp_evm(self) -> CdpEvmWalletProvider:
+    async def _init_cdp_evm(self) -> CdpEvmWalletProvider:
         """
         Initializes an EVM wallet using Coinbase CDP.
         """
@@ -182,7 +189,13 @@ class EvmWallet(BaseWallet):
             logger.info("Creating a new CDP wallet identifier")
             config.idempotency_key = str(uuid.uuid4())
 
-        provider = CdpEvmWalletProvider(config)
+        # CRITICAL FIX: The CdpEvmWalletProvider constructor calls asyncio.run()
+        # internally. To avoid "RuntimeError: asyncio.run() cannot be called from
+        # a running event loop", we must run the instantiation in a separate thread.
+        loop = asyncio.get_running_loop()
+        provider = await loop.run_in_executor(
+            None, lambda: CdpEvmWalletProvider(config)
+        )
 
         if wallet_address is None:
             wallet_address = provider.get_address()
@@ -200,7 +213,7 @@ class EvmWallet(BaseWallet):
         )
         return provider
 
-    def get_balances(self) -> Dict[str, float]:
+    async def get_balances(self) -> Dict[str, float]:
         """
         Fetches native and USDC balances for the EVM wallet.
         """

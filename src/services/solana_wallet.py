@@ -7,7 +7,7 @@ import os
 from typing import Dict
 
 import base58
-from solana.rpc.api import Client
+from solana.rpc.async_api import AsyncClient
 from solana.rpc.types import TokenAccountOpts
 from solders.keypair import Keypair  # type: ignore
 from solders.pubkey import Pubkey
@@ -25,8 +25,12 @@ class SolanaWallet(BaseWallet):
     Handles Solana Devnet wallet operations.
     """
 
-    def __init__(self, client: Client):
-        self.client = client
+    def __init__(self, rpc_url: str):
+        """
+        Initialize the Solana wallet and load the keypair.
+        """
+        self.rpc_url = rpc_url
+        self.client = AsyncClient(self.rpc_url, timeout=60)
         self.keypair: Keypair = self._init_solana()
 
     def _init_solana(self) -> Keypair:
@@ -40,13 +44,11 @@ class SolanaWallet(BaseWallet):
         if private_key_str:
             try:
                 keypair = Keypair.from_bytes(base58.b58decode(private_key_str))
-                logger.info(
-                    "Successfully loaded Solana keypair from environment variable."
-                )
+                logger.info("Successfully loaded Solana keypair from environment.")
                 return keypair
             except ValueError as e:
                 logger.warning(
-                    "Invalid SOLANA_PRIVATE_KEY format in environment variables: %s. "
+                    "Invalid SOLANA_PRIVATE_KEY format in env: %s. "
                     "Falling back to file persistence.",
                     e,
                 )
@@ -83,32 +85,35 @@ class SolanaWallet(BaseWallet):
 
         return keypair
 
-    def get_balances(self) -> Dict[str, float]:
+    async def get_balances(self) -> Dict[str, float]:
         """
-        Fetches native and USDC balances for Solana.
+        Fetches balances using the async client.
         """
+        sol_balance = 0.0
+        usdc_balance = 0.0
+        pubkey = self.keypair.pubkey()
+
         try:
             # Native Balance
-            sol_balance = self.client.get_balance(self.keypair.pubkey()).value / 10**9
-        except Exception as e:
-            logger.warning("Failed to fetch Solana native balance: %s", e)
-            sol_balance = 0.0
+            res = await self.client.get_balance(pubkey)
+            sol_balance = res.value / 10**9
 
-        usdc_balance = 0.0
-        try:
             # USDC Balance
             usdc_pubkey = Pubkey.from_string(SOLANA_USDC_MINT)
-            token_accounts = self.client.get_token_accounts_by_owner(
-                self.keypair.pubkey(), TokenAccountOpts(mint=usdc_pubkey)
+            token_res = await self.client.get_token_accounts_by_owner(
+                pubkey, TokenAccountOpts(mint=usdc_pubkey)
             )
 
-            if token_accounts.value:
-                account_pubkey = token_accounts.value[0].pubkey
-                account_info = self.client.get_token_account_balance(account_pubkey)
-                if account_info.value and account_info.value.ui_amount:
-                    usdc_balance = float(account_info.value.ui_amount)
+            if token_res.value:
+                account_pubkey = token_res.value[0].pubkey
+                balance_res = await self.client.get_token_account_balance(
+                    account_pubkey
+                )
+                if balance_res.value and balance_res.value.ui_amount:
+                    usdc_balance = float(balance_res.value.ui_amount)
+
         except Exception as e:
-            logger.warning("Failed to fetch Solana USDC balance: %s", e)
+            logger.warning("Failed to fetch Solana balances: %s", e)
 
         return {"native": sol_balance, "usdc": usdc_balance}
 

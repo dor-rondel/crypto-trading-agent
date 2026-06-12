@@ -5,8 +5,6 @@ Orchestrator for managing multi-chain wallets.
 import logging
 from typing import Dict
 
-from solana.rpc.api import Client
-
 from src.config import Config
 from src.services.base_wallet import BaseWallet
 from src.services.evm_wallet import EvmWallet
@@ -22,12 +20,20 @@ class WalletManager:
 
     def __init__(self) -> None:
         """
-        Initialize the WalletManager and load/create wallets for all chains.
+        Initialize the WalletManager container.
         """
-        logger.info("Initializing WalletManager and loading wallets...")
-        sol_client = Client(Config.SOLANA_RPC_URL, timeout=60)
-        self.wallets: Dict[str, BaseWallet] = {
-            "solana": SolanaWallet(sol_client),
+        logger.info("Initializing WalletManager container...")
+        self.wallets: Dict[str, BaseWallet] = {}
+
+    async def initialize(self) -> None:
+        """
+        Asynchronously load/create wallets for all chains.
+        """
+        logger.info("Asynchronously loading wallets for all chains...")
+
+        # Instantiate wallets
+        self.wallets = {
+            "solana": SolanaWallet(Config.SOLANA_RPC_URL),
             "sepolia": EvmWallet(
                 "ethereum-sepolia",
                 Config.SEPOLIA_WALLET_DATA_FILE,
@@ -39,6 +45,13 @@ class WalletManager:
                 rpc_url=Config.AVAX_FUJI_RPC_URL,
             ),
         }
+
+        # Async initialization for each wallet
+        for network_id, wallet in self.wallets.items():
+            if network_id != "solana" and hasattr(wallet, "initialize"):
+                logger.info("Initializing wallet for network: %s", network_id)
+                await wallet.initialize()  # type: ignore
+
         logger.info("All wallets successfully loaded.")
         self._write_wallet_info_file()
 
@@ -91,8 +104,11 @@ class WalletManager:
         except Exception as e:
             logger.error("Failed to write WALLETS.md: %s", e)
 
-    def get_balances(self) -> Dict[str, Dict[str, float]]:
+    async def get_balances(self) -> Dict[str, Dict[str, float]]:
         """
-        Fetches balances for all wallets.
+        Fetches balances for all wallets asynchronously.
         """
-        return {name: wallet.get_balances() for name, wallet in self.wallets.items()}
+        results: Dict[str, Dict[str, float]] = {}
+        for name, wallet in self.wallets.items():
+            results[name] = await wallet.get_balances()
+        return results
