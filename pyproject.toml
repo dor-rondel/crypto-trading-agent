@@ -15,6 +15,7 @@ dependencies = [
     "pydantic",
     "python-dotenv",
     "httpx>=0.28.1",
+    "base58>=2.1.1",
 ]
 
 [dependency-groups]
@@ -35,10 +36,15 @@ target-version = "py312"
 select = ["E", "F", "B", "I"]
 ignore = []
 
+[tool.pylint.main]
+init-hook = "import sys; sys.path.insert(0, '.')"
+
 [tool.pylint]
 max-line-length = 88
 disable = [
     "C0114", # missing-module-docstring (already required by GEMINI.md, but let's keep it clean)
+    "R0903", # too-few-public-methods
+    "W0718", # broad-exception-caught
 ]
 
 [tool.pytest.ini_options]
@@ -53,3 +59,4 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
+explicit_package_bases = true

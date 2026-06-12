@@ -20,3 +20,8 @@ build/
 # IDEs
 .vscode/
 .idea/
+
+# Wallets
+.solana_wallet
+*_wallet.json
+WALLETS.md
