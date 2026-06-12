@@ -119,6 +119,11 @@ Responsibilities:
 Responsibilities:
 
 - Poll market data providers (e.g., CoinGecko, Binance).
+- **Batching:** Aggregate price snapshots from all configured providers before emitting a single consolidated signal to avoid redundant agent executions.
+- **Robustness & Error Handling:** 
+  - **Partial Failures:** If an individual provider call fails, log the error but continue to aggregate data from successful providers. The system must not block execution unless all provider calls fail.
+  - **Total Failures:** If all providers fail, the system must log an error and skip triggering the agent to prevent passing invalid, empty, or zero-value data.
+  - **Data Integrity:** Providers must return validated `MarketSnapshot` objects. Invalid API responses should result in a `None` return, which the `MarketWatcher` will correctly filter out.
 - Detect trading signals and emit events.
   Must not execute trades or modify portfolios.
 
@@ -215,6 +220,18 @@ src/
 
 ---
 
-# Future Direction
+# Future Roadmap & Backlog
 
-- Portfolio rebalancing, backtesting, strategy benchmarking, multiple planner models, distributed execution, and human approval workflows.
+## Roadmap
+
+- **Phase 1: Foundation** (Completed)
+- **Phase 2: Agentic Trading** (In Progress)
+- **Phase 3: Orchestration**
+- **Phase 4: Advanced Features**
+
+## Backlog
+
+- **Market Data Resilience:** Implement a Binance API fallback in the `MarketWatcher` to ensure service continuity if CoinGecko experiences downtime.
+- **RPC Connectivity:** Introduce automatic RPC endpoint fallbacks for chain connectivity to mitigate bottlenecks and ensure reliable transaction submission during high network congestion.
+- **Agent Enhancements:** Integrate real-time sentiment analysis, expand asset support, and implement advanced risk management strategies for better decision-making.
+- **Backtesting & Simulation:** Develop a backtesting engine to evaluate strategies against historical data before deployment on testnets.

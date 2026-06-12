@@ -92,6 +92,10 @@ class MarketWatcher:
                         len(batched_snapshot.assets),
                     )
                     await self._callback(batched_snapshot)
+                elif not all_assets:
+                    logger.error(
+                        "All market data providers failed. Skipping agent trigger."
+                    )
 
                 await asyncio.sleep(self.interval)
         except asyncio.CancelledError:

@@ -41,6 +41,36 @@ async def test_coingecko_provider_success():
 
 
 @pytest.mark.asyncio
+async def test_coingecko_provider_failure():
+    """
+    Test CoinGeckoProvider handling of API failures and empty data.
+    """
+    provider = CoinGeckoProvider()
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_res = MagicMock()
+        mock_res.status_code = 500
+        mock_res.raise_for_status.side_effect = Exception("API Error")
+        mock_get.return_value = mock_res
+
+        snapshot = await provider.get_snapshot(["ETH"])
+
+    assert snapshot is None
+
+    # Empty result
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {}
+        mock_res.raise_for_status = lambda: None
+        mock_get.return_value = mock_res
+
+        snapshot = await provider.get_snapshot(["ETH"])
+
+    assert snapshot is None
+
+
+@pytest.mark.asyncio
 async def test_market_watcher_polling():
     """
     Test that MarketWatcher correctly polls and emits snapshots.
@@ -71,3 +101,58 @@ async def test_market_watcher_polling():
 
     assert len(snapshots_received) >= 2
     assert snapshots_received[0].source == "MockProvider"
+
+
+@pytest.mark.asyncio
+async def test_market_watcher_robustness():
+    """
+    Test that MarketWatcher handles partial provider failures and skips
+    when all providers fail.
+    """
+    from src.events.market_signal import AssetPrice
+
+    # Provider 1 succeeds, Provider 2 fails
+    provider1 = AsyncMock()
+    provider1.get_snapshot.return_value = MarketSnapshot(
+        assets={"ETH": AssetPrice(price=3000.0)},
+        source="GoodProvider",
+        timestamp=datetime.now(UTC),
+    )
+
+    provider2 = AsyncMock()
+    provider2.get_snapshot.side_effect = Exception("API Error")
+
+    watcher = MarketWatcher(
+        assets=["ETH"], interval=0.01, providers=[provider1, provider2]
+    )
+
+    snapshots_received = []
+
+    async def callback(snapshot):
+        snapshots_received.append(snapshot)
+        watcher.stop()
+
+    watcher.on_snapshot(callback)
+
+    # Run watcher
+    await watcher.start()
+
+    # Should have triggered once with partial data
+    assert len(snapshots_received) == 1
+    assert "ETH" in snapshots_received[0].assets
+    assert snapshots_received[0].source == "GoodProvider"
+
+    # Reset
+    snapshots_received = []
+
+    # Both providers fail
+    provider1.get_snapshot.side_effect = Exception("API Error 1")
+    provider2.get_snapshot.side_effect = Exception("API Error 2")
+
+    watcher._is_running = True  # Reset run flag for retry
+
+    # Run again
+    await watcher.start()
+
+    # Callback should not have been triggered
+    assert len(snapshots_received) == 0

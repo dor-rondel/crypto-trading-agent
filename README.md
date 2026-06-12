@@ -51,7 +51,9 @@ Real market data is used to generate trading signals, while all trade execution 
 
 ### High-Level Flow
 
-Market Watcher → Signal Generated → Planner Agent → Structured Plan → Validator → Executor → Transaction Monitor → Portfolio Manager
+Market Watcher (Batched) → Signal Generated → Planner Agent → Structured Plan → Validator → Executor → Transaction Monitor → Portfolio Manager
+
+**Note on Market Data:** The `MarketWatcher` service aggregates price snapshots from all configured providers before emitting a single consolidated signal. This ensures that the agent is triggered only once per polling interval with a complete view of the market, effectively preventing redundant agent executions and inefficient resource usage.
 
 ---
 
@@ -121,24 +123,17 @@ Ensure your `.env` file is configured with the necessary API keys and RPC URLs (
 
 ---
 
-## Future Roadmap
+## Future Roadmap & Backlog
 
-### Phase 1: Foundation
-- Multi-chain Wallet Manager
-- Chain Adapters (Solana & EVM)
-- Market Watcher
+### Roadmap
+- **Phase 1: Foundation** (Completed)
+- **Phase 2: Agentic Trading** (In Progress)
+- **Phase 3: Orchestration**
+- **Phase 4: Advanced Features**
 
-### Phase 2: Agentic Trading
-- Planner Agent (Groq)
-- Deterministic Validator
-- Executor Service
+### Backlog
+- **Market Data Resilience:** Implement a Binance API fallback in the `MarketWatcher` to ensure service continuity if CoinGecko experiences downtime.
+- **RPC Connectivity:** Introduce automatic RPC endpoint fallbacks for chain connectivity to mitigate bottlenecks and ensure reliable transaction submission during high network congestion.
+- **Agent Enhancements:** Integrate real-time sentiment analysis, expand asset support, and implement advanced risk management strategies for better decision-making.
+- **Backtesting & Simulation:** Develop a backtesting engine to evaluate strategies against historical data before deployment on testnets.
 
-### Phase 3: Orchestration
-- Persistent Workflow State (PostgreSQL)
-- Portfolio & Capital Reservation
-- Transaction Monitoring
-
-### Phase 4: Advanced Features
-- Backtesting Engine
-- Strategy Benchmarking
-- Multi-strategy support
