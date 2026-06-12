@@ -6,18 +6,19 @@ import json
 import os
 import uuid
 from typing import Any, Dict, Optional
-from eth_account import Account
 
 from coinbase_agentkit import CdpEvmWalletProvider, CdpEvmWalletProviderConfig
-from coinbase_agentkit.wallet_providers import (
-    EthAccountWalletProvider,
-    EthAccountWalletProviderConfig,
-)
+
 # CORRECT IMPORT: Pull the validation registries from the network module
 from coinbase_agentkit.network import (
     CHAIN_ID_TO_NETWORK_ID,
     NETWORK_ID_TO_CHAIN,
 )
+from coinbase_agentkit.wallet_providers import (
+    EthAccountWalletProvider,
+    EthAccountWalletProviderConfig,
+)
+from eth_account import Account
 
 
 class EvmWallet:
@@ -44,51 +45,70 @@ class EvmWallet:
         """
         # --- 1. HANDLE CUSTOM CHAINS (e.g., Avalanche Fuji) ---
         if self.chain_id and self.rpc_url:
-            str_chain_id = str(self.chain_id)
-            
-            # RUNTIME PATCH: Inject Avalanche Fuji into AgentKit's network maps
-            CHAIN_ID_TO_NETWORK_ID[str_chain_id] = self.network_id
-            
-            # Clone an existing network layout structure as a placeholder to pass internal checks
-            if "ethereum-sepolia" in NETWORK_ID_TO_CHAIN:
-                NETWORK_ID_TO_CHAIN[self.network_id] = NETWORK_ID_TO_CHAIN["ethereum-sepolia"]
-            elif "base-sepolia" in NETWORK_ID_TO_CHAIN:
-                NETWORK_ID_TO_CHAIN[self.network_id] = NETWORK_ID_TO_CHAIN["base-sepolia"]
-            else:
-                NETWORK_ID_TO_CHAIN[self.network_id] = next(iter(NETWORK_ID_TO_CHAIN.values()))
-
-            local_private_key = None
-            if os.path.exists(self.data_file):
-                try:
-                    with open(self.data_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        local_private_key = data.get("private_key")
-                except Exception:
-                    pass
-
-            # Create a local key if it doesn't exist yet
-            if not local_private_key:
-                new_account = Account.create()
-                local_private_key = new_account.key.hex()
-                with open(self.data_file, "w", encoding="utf-8") as f:
-                    json.dump({"private_key": local_private_key}, f)
-
-            account = Account.from_key(local_private_key)
-            
-            config = EthAccountWalletProviderConfig(
-                account=account,
-                chain_id=str_chain_id,
-                rpc_url=self.rpc_url,
-            )
-            return EthAccountWalletProvider(config)
+            return self._init_custom_evm()
 
         # --- 2. HANDLE CDP CLOUD CHAINS (e.g., Sepolia) ---
+        return self._init_cdp_evm()
+
+    def _init_custom_evm(self) -> EthAccountWalletProvider:
+        """
+        Initializes a custom EVM wallet with local key storage.
+        """
+        str_chain_id = str(self.chain_id)
+
+        # RUNTIME PATCH: Inject Avalanche Fuji into AgentKit's network maps
+        CHAIN_ID_TO_NETWORK_ID[str_chain_id] = self.network_id
+
+        # Clone an existing network layout structure as a placeholder to
+        # pass internal checks.
+        if "ethereum-sepolia" in NETWORK_ID_TO_CHAIN:
+            NETWORK_ID_TO_CHAIN[self.network_id] = NETWORK_ID_TO_CHAIN[
+                "ethereum-sepolia"
+            ]
+        elif "base-sepolia" in NETWORK_ID_TO_CHAIN:
+            NETWORK_ID_TO_CHAIN[self.network_id] = NETWORK_ID_TO_CHAIN["base-sepolia"]
+        else:
+            NETWORK_ID_TO_CHAIN[self.network_id] = next(
+                iter(NETWORK_ID_TO_CHAIN.values())
+            )
+
+        local_private_key = None
+        if os.path.exists(self.data_file):
+            try:
+                with open(self.data_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    local_private_key = data.get("private_key")
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+
+        # Create a local key if it doesn't exist yet
+        if not local_private_key:
+            new_account = Account.create()  # pylint: disable=no-value-for-parameter
+            local_private_key = new_account.key.hex()
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump({"private_key": local_private_key}, f)
+
+        account = Account.from_key(local_private_key)  # pylint: disable=no-value-for-parameter
+
+        config = EthAccountWalletProviderConfig(
+            account=account,
+            chain_id=str_chain_id,
+            rpc_url=self.rpc_url,
+        )
+        return EthAccountWalletProvider(config)
+
+    def _init_cdp_evm(self) -> CdpEvmWalletProvider:
+        """
+        Initializes an EVM wallet using Coinbase CDP.
+        """
         key_file_path = os.getenv("CDP_API_KEY_FILE", "cdp_api_key.json")
         try:
             with open(key_file_path, "r", encoding="utf-8") as f:
                 key_data = json.load(f)
                 os.environ["CDP_API_KEY_ID"] = str(key_data.get("name", ""))
-                os.environ["CDP_API_KEY_SECRET"] = str(key_data.get("privateKey", "")).replace("\\n", "\n")
+                os.environ["CDP_API_KEY_SECRET"] = str(
+                    key_data.get("privateKey", "")
+                ).replace("\\n", "\n")
         except FileNotFoundError:
             pass
 
@@ -98,7 +118,7 @@ class EvmWallet:
                 with open(self.data_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     wallet_address = data.get("address")
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 pass
 
         config = CdpEvmWalletProviderConfig(

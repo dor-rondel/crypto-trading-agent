@@ -2,16 +2,13 @@
 Orchestrator for managing multi-chain wallets.
 """
 
-import os
 from typing import Any, Dict
 
-from dotenv import load_dotenv
 from solana.rpc.api import Client
 
+from src.config import Config
 from src.services.evm_wallet import EvmWallet
 from src.services.solana_wallet import SolanaWallet
-
-load_dotenv()
 
 
 class WalletManager:
@@ -23,20 +20,18 @@ class WalletManager:
         """
         Initialize the WalletManager and load/create wallets for all chains.
         """
-        sol_client = Client(
-            os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com"), timeout=60
-        )
+        sol_client = Client(Config.SOLANA_RPC_URL, timeout=60)
         self.wallets: Dict[str, Any] = {
             "solana": SolanaWallet(sol_client),
             "sepolia": EvmWallet(
                 "ethereum-sepolia",
-                os.getenv("SEPOLIA_WALLET_DATA_FILE", "sepolia_wallet.json"),
+                Config.SEPOLIA_WALLET_DATA_FILE,
             ),
             "avalanche-fuji": EvmWallet(
                 "avalanche-fuji",
-                os.getenv("FUJI_WALLET_DATA_FILE", "fuji_wallet.json"),
+                Config.FUJI_WALLET_DATA_FILE,
                 chain_id="43113",
-                rpc_url="https://avalanche-fuji.infura.io/v3/bec088a5e4bc4c459a346f52f3492252",
+                rpc_url=Config.AVAX_FUJI_RPC_URL,
             ),
         }
         self._write_wallet_info_file()

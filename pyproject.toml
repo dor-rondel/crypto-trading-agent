@@ -36,10 +36,14 @@ target-version = "py312"
 select = ["E", "F", "B", "I"]
 ignore = []
 
+[tool.pylint.main]
+init-hook = "import sys; sys.path.insert(0, '.')"
+
 [tool.pylint]
 max-line-length = 88
 disable = [
     "C0114", # missing-module-docstring (already required by GEMINI.md, but let's keep it clean)
+    "R0903", # too-few-public-methods
 ]
 
 [tool.pytest.ini_options]
