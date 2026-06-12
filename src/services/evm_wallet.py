@@ -3,6 +3,7 @@ Service for managing EVM-specific wallet operations.
 """
 
 import json
+import logging
 import os
 import uuid
 from typing import Any, Dict, Optional
@@ -19,9 +20,33 @@ from coinbase_agentkit.wallet_providers import (
     EthAccountWalletProviderConfig,
 )
 from eth_account import Account
+from web3 import Web3
+
+from src.services.base_wallet import BaseWallet
+
+logger = logging.getLogger(__name__)
+
+# Standard testnet USDC contract addresses
+EVM_USDC_CONTRACTS = {
+    "ethereum-sepolia": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "avalanche-fuji": "0x5425890298aed601595a70AB815c96711a31Bc65",
+}
+
+# Minimal ERC20 ABI for querying balanceOf
+ERC20_ABI = [
+    {
+        "constant": True,
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "payable": False,
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
 
 
-class EvmWallet:
+class EvmWallet(BaseWallet):
     """
     Handles EVM wallet operations using Coinbase CDP or local accounts.
     """
@@ -55,6 +80,11 @@ class EvmWallet:
         Initializes a custom EVM wallet with local key storage.
         """
         str_chain_id = str(self.chain_id)
+        logger.info(
+            "Initializing custom EVM wallet for chain %s using data file: %s",
+            str_chain_id,
+            self.data_file,
+        )
 
         # RUNTIME PATCH: Inject Avalanche Fuji into AgentKit's network maps
         CHAIN_ID_TO_NETWORK_ID[str_chain_id] = self.network_id
@@ -78,11 +108,18 @@ class EvmWallet:
                 with open(self.data_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     local_private_key = data.get("private_key")
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "Failed to parse private key from local data file %s: %s",
+                    self.data_file,
+                    e,
+                )
 
         # Create a local key if it doesn't exist yet
         if not local_private_key:
+            logger.info(
+                "Generating new local private key and saving to %s", self.data_file
+            )
             new_account = Account.create()  # pylint: disable=no-value-for-parameter
             local_private_key = new_account.key.hex()
             with open(self.data_file, "w", encoding="utf-8") as f:
@@ -95,12 +132,18 @@ class EvmWallet:
             chain_id=str_chain_id,
             rpc_url=self.rpc_url,
         )
-        return EthAccountWalletProvider(config)
+        provider = EthAccountWalletProvider(config)
+        logger.info(
+            "Successfully initialized custom EVM wallet for address: %s",
+            provider.get_address(),
+        )
+        return provider
 
     def _init_cdp_evm(self) -> CdpEvmWalletProvider:
         """
         Initializes an EVM wallet using Coinbase CDP.
         """
+        logger.info("Initializing CDP EVM wallet for network: %s", self.network_id)
         key_file_path = os.getenv("CDP_API_KEY_FILE", "cdp_api_key.json")
         try:
             with open(key_file_path, "r", encoding="utf-8") as f:
@@ -110,7 +153,10 @@ class EvmWallet:
                     key_data.get("privateKey", "")
                 ).replace("\\n", "\n")
         except FileNotFoundError:
-            pass
+            logger.debug(
+                "CDP API key file %s not found. Relying on environment variables.",
+                key_file_path,
+            )
 
         wallet_address = None
         if os.path.exists(self.data_file):
@@ -118,40 +164,77 @@ class EvmWallet:
                 with open(self.data_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     wallet_address = data.get("address")
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "Failed to parse wallet address from local data file %s: %s",
+                    self.data_file,
+                    e,
+                )
 
         config = CdpEvmWalletProviderConfig(
             network_id=self.network_id,
         )
 
         if wallet_address:
+            logger.info("Loading existing CDP wallet address: %s", wallet_address)
             config.address = wallet_address
         else:
+            logger.info("Creating a new CDP wallet identifier")
             config.idempotency_key = str(uuid.uuid4())
 
         provider = CdpEvmWalletProvider(config)
 
         if wallet_address is None:
+            wallet_address = provider.get_address()
+            logger.info(
+                "Persisting generated CDP wallet address %s to %s",
+                wallet_address,
+                self.data_file,
+            )
             with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump({"address": provider.get_address()}, f)
+                json.dump({"address": wallet_address}, f)
 
+        logger.info(
+            "Successfully initialized CDP EVM wallet for address: %s",
+            wallet_address,
+        )
         return provider
 
     def _save_wallet_secret(self, wallet_data: str) -> None:
         """Saves the wallet secret to the data file."""
+        logger.info("Saving updated wallet secret to %s", self.data_file)
         with open(self.data_file, "w", encoding="utf-8") as f:
             json.dump({"wallet_secret": wallet_data}, f)
 
     def get_balances(self) -> Dict[str, float]:
         """
-        Fetches native balance for the EVM wallet.
+        Fetches native and USDC balances for the EVM wallet.
         """
         try:
             native_balance = float(self.provider.get_balance() or 0.0) / 10**18
-            return {"native": native_balance, "usdc": 0.0}
-        except (ValueError, TypeError, RuntimeError):
-            return {"native": 0.0, "usdc": 0.0}
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch native balance for %s: %s", self.network_id, e
+            )
+            native_balance = 0.0
+
+        usdc_balance = 0.0
+        usdc_address = EVM_USDC_CONTRACTS.get(self.network_id)
+        if usdc_address:
+            try:
+                balance_units = self.provider.read_contract(
+                    contract_address=Web3.to_checksum_address(usdc_address),
+                    abi=ERC20_ABI,
+                    function_name="balanceOf",
+                    args=[Web3.to_checksum_address(self.get_address())],
+                )
+                usdc_balance = float(balance_units) / 10**6
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch USDC balance for %s: %s", self.network_id, e
+                )
+
+        return {"native": native_balance, "usdc": usdc_balance}
 
     def get_address(self) -> str:
         """Returns the address of the EVM wallet."""

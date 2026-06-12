@@ -44,6 +44,7 @@ max-line-length = 88
 disable = [
     "C0114", # missing-module-docstring (already required by GEMINI.md, but let's keep it clean)
     "R0903", # too-few-public-methods
+    "W0718", # broad-exception-caught
 ]
 
 [tool.pytest.ini_options]

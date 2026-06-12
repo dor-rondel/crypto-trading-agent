@@ -2,13 +2,17 @@
 Orchestrator for managing multi-chain wallets.
 """
 
-from typing import Any, Dict
+import logging
+from typing import Dict
 
 from solana.rpc.api import Client
 
 from src.config import Config
+from src.services.base_wallet import BaseWallet
 from src.services.evm_wallet import EvmWallet
 from src.services.solana_wallet import SolanaWallet
+
+logger = logging.getLogger(__name__)
 
 
 class WalletManager:
@@ -20,8 +24,9 @@ class WalletManager:
         """
         Initialize the WalletManager and load/create wallets for all chains.
         """
+        logger.info("Initializing WalletManager and loading wallets...")
         sol_client = Client(Config.SOLANA_RPC_URL, timeout=60)
-        self.wallets: Dict[str, Any] = {
+        self.wallets: Dict[str, BaseWallet] = {
             "solana": SolanaWallet(sol_client),
             "sepolia": EvmWallet(
                 "ethereum-sepolia",
@@ -34,6 +39,7 @@ class WalletManager:
                 rpc_url=Config.AVAX_FUJI_RPC_URL,
             ),
         }
+        logger.info("All wallets successfully loaded.")
         self._write_wallet_info_file()
 
     def get_address(self, network_id: str) -> str:
@@ -41,12 +47,16 @@ class WalletManager:
         Returns the address of a wallet for a given network.
         """
         wallet = self.wallets.get(network_id)
-        return wallet.get_address() if wallet else "ERROR"
+        if not wallet:
+            logger.error("Requested wallet address for unknown network: %s", network_id)
+            return "ERROR"
+        return wallet.get_address()
 
     def _write_wallet_info_file(self) -> None:
         """
         Writes public wallet information and funding instructions to WALLETS.md.
         """
+        logger.info("Writing WALLETS.md wallet information file...")
         info = "# Wallet Information & Funding Instructions\n\n"
         info += "Use the following to fund wallets\n"
         info += "with testnet Native tokens and USDC.\n\n"
@@ -74,8 +84,12 @@ class WalletManager:
         info += "---\n"
         info += "*Note: Private keys are included here for testnet convenience.*\n"
 
-        with open("WALLETS.md", "w", encoding="utf-8") as f:
-            f.write(info)
+        try:
+            with open("WALLETS.md", "w", encoding="utf-8") as f:
+                f.write(info)
+            logger.info("WALLETS.md successfully written.")
+        except Exception as e:
+            logger.error("Failed to write WALLETS.md: %s", e)
 
     def get_balances(self) -> Dict[str, Dict[str, float]]:
         """
