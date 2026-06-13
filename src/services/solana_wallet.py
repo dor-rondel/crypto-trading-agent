@@ -9,15 +9,19 @@ from typing import Dict
 import base58
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.types import TokenAccountOpts
-from solders.keypair import Keypair  # type: ignore
-from solders.pubkey import Pubkey
 
+# pylint: disable=no-name-in-module, import-error
+# pylint: enable=no-name-in-module, import-error
+from solders.instruction import Instruction  # type: ignore
+from solders.keypair import Keypair  # type: ignore
+from solders.message import Message  # type: ignore
+from solders.pubkey import Pubkey
+from solders.transaction import Transaction  # type: ignore
+
+from src.constants.solana import MEMO_PROGRAM_ID, USDC_MINT
 from src.services.base_wallet import BaseWallet
 
 logger = logging.getLogger(__name__)
-
-# Solana Devnet USDC Mint
-SOLANA_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 
 
 class SolanaWallet(BaseWallet):
@@ -99,7 +103,7 @@ class SolanaWallet(BaseWallet):
             sol_balance = res.value / 10**9
 
             # USDC Balance
-            usdc_pubkey = Pubkey.from_string(SOLANA_USDC_MINT)
+            usdc_pubkey = Pubkey.from_string(USDC_MINT)
             token_res = await self.client.get_token_accounts_by_owner(
                 pubkey, TokenAccountOpts(mint=usdc_pubkey)
             )
@@ -117,23 +121,55 @@ class SolanaWallet(BaseWallet):
 
         return {"native": sol_balance, "usdc": usdc_balance}
 
+    async def _send_memo(self, memo_text: str) -> str:
+        """
+        Helper to construct and send a transaction containing a memo instruction.
+        """
+        logger.info("Submitting Solana memo: %s", memo_text)
+
+        # Build instruction
+        instruction = Instruction(
+            program_id=Pubkey.from_string(MEMO_PROGRAM_ID),
+            data=memo_text.encode("utf-8"),
+            accounts=[],
+        )
+
+        try:
+            # Get latest blockhash
+            res = await self.client.get_latest_blockhash()
+            blockhash = res.value.blockhash
+
+            # Create message and transaction
+            message = Message.new_with_blockhash(
+                [instruction], self.keypair.pubkey(), blockhash
+            )
+            tx = Transaction([self.keypair], message, blockhash)
+
+            # Send transaction
+            send_res = await self.client.send_raw_transaction(bytes(tx))
+            tx_hash = str(send_res.value)
+
+            logger.info("Solana memo submitted successfully. Hash: %s", tx_hash)
+            return f"solana-tx-{tx_hash}"
+        except Exception as e:
+            logger.error("Failed to send Solana memo: %s", e)
+            raise
+
     async def swap_usdc_for_token(self, amount_usdc: float, token_symbol: str) -> str:
         """
-        Mock swap on Solana Devnet.
+        Executes a real on-chain record for the swap intent.
+        Consumes gas and creates a verifiable transaction.
         """
-        logger.info(
-            "MOCK: Swapping %.2f USDC for %s on Solana", amount_usdc, token_symbol
-        )
-        return "sol-mock-tx-hash-buy"
+        memo_text = f"SWAP_INTENT: BUY {token_symbol} WITH {amount_usdc} USDC"
+        return await self._send_memo(memo_text)
 
     async def swap_token_for_usdc(self, amount_token: float, token_symbol: str) -> str:
         """
-        Mock swap on Solana Devnet.
+        Executes a real on-chain record for the swap intent.
+        Consumes gas and creates a verifiable transaction.
         """
-        logger.info(
-            "MOCK: Swapping %.2f %s for USDC on Solana", amount_token, token_symbol
-        )
-        return "sol-mock-tx-hash-sell"
+        memo_text = f"SWAP_INTENT: SELL {amount_token} {token_symbol} FOR USDC"
+        return await self._send_memo(memo_text)
 
     def get_address(self) -> str:
         """Returns the public address."""
