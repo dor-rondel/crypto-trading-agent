@@ -23,6 +23,7 @@ Supported chains:
 The system follows a strict separation between planning and execution.
 
 ### Modular Workflows
+
 - **Architecture:** Decouple reasoning from execution using LangGraph. Maintain separate files for nodes, state, and graph definitions.
 - **Prompts:** All LLM prompts must reside in `src/prompts/`. Do not hardcode prompts in agent classes.
 - **Models:** Use Pydantic models for all inter-node communication (e.g., `TradePlan`, `TradeAction`).
@@ -35,6 +36,20 @@ Executors perform blockchain operations.
 - **EVM Chains:** Use `AgentKit` and the `Coinbase CDP SDK` for swaps and wallet management. `web3.py` may be used for low-level deterministic checks.
 - **Solana:** Use `solana-py` for transaction construction and signing.
 - Executors must never generate strategy decisions.
+
+#### Technical Rationale: Solana Memo Program
+On Solana, the system uses the **Memo Program** (`MemoSq9gHqT9VkU4beuy66Gf364aJ6Eic52pD34j3K`) to record trade intents (e.g., `"BUY 1 SOL with 145 USDC"`) directly on-chain.
+- **Verifiability:** Every agent decision results in a real transaction hash and a verifiable on-chain record that can be audited via block explorers. This ensures the simulation remains tethered to real-world blockchain activity.
+- **Economic Simulation:** It consumes real Devnet SOL for gas, simulating the economic impact and transaction lifecycle of trading without the immediate complexity of full DEX (e.g., Jupiter) integration.
+- **Simplicity:** It provides a lightweight way to demonstrate "Proof of Intent" during the prototyping phase while remaining extensible for future DEX integration.
+
+
+#### Technical Rationale: Wrapped Tokens (WETH/WAVAX)
+
+Native gas tokens (ETH, AVAX) do not follow the ERC-20 standard.
+
+- **Compatibility:** Protocols like Uniswap V3 require ERC-20 compliance.
+- **Wrapping:** The system interacts with **WETH** and **WAVAX** contracts to enable seamless swaps with USDC while maintaining exposure to the native asset's price action.
 
 ---
 
@@ -122,4 +137,6 @@ Workflow state, pending transactions, plans, portfolio state, and reservations m
 - Type hints are required.
 - Use Pydantic models or dataclasses over generic dictionaries.
 - **Standard Logging:** Use Python's standard `logging.getLogger(__name__)`.
+- **Mandatory Quality Checks:** Before finalizing any task, run `make check`.
+on's standard `logging.getLogger(__name__)`.
 - **Mandatory Quality Checks:** Before finalizing any task, run `make check`.

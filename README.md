@@ -124,6 +124,21 @@ make check
 make test
 ```
 
+### Integration Testing: Swaps
+
+You can verify the swap logic on each supported chain (Solana Devnet, Ethereum Sepolia, Avalanche Fuji) using the `test_swaps.py` script. This performs a real on-chain transaction (Memo on Solana, Swap on EVM).
+
+```bash
+# Solana
+uv run scripts/test_swaps.py --chain solana --direction buy --amount 0.001 --asset SOL
+
+# Ethereum Sepolia
+uv run scripts/test_swaps.py --chain sepolia --direction buy --amount 1.0 --asset ETH
+
+# Avalanche Fuji
+uv run scripts/test_swaps.py --chain avalanche-fuji --direction buy --amount 1.0 --asset AVAX
+```
+
 ### Configuration
 
 Ensure your `.env` file is configured with the necessary API keys and RPC URLs (especially for reliable Solana Devnet connectivity).
@@ -139,6 +154,10 @@ Ensure your `.env` file is configured with the necessary API keys and RPC URLs (
 - **Phase 4: Advanced Features**
 
 ### Backlog
+- **Prod-Readiness Assessment:**
+  - **Transaction Confirmation:** Currently, the system returns a hash as soon as the transaction is sent. In production, add logic to wait for the transaction to be confirmed/finalized before proceeding with the next step in the workflow.
+  - **Retry Logic:** Testnet RPCs are notoriously flaky. Implement exponential backoff retries for all blockchain interactions to prevent transient failures from crashing the agent.
+  - **Position Tracking:** Implement a persistence layer (e.g., updating a SQLite DB) to track open positions and realized gains/losses across sessions.
 - **Market Data Resilience:** Implement a Binance API fallback in the `MarketWatcher` to ensure service continuity if CoinGecko experiences downtime.
 - **RPC Connectivity:** Introduce automatic RPC endpoint fallbacks for chain connectivity to mitigate bottlenecks and ensure reliable transaction submission during high network congestion.
 - **Agent Enhancements:** Integrate real-time sentiment analysis, expand asset support, and implement advanced risk management strategies for better decision-making.
