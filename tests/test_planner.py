@@ -15,6 +15,7 @@ async def test_planner_agent_plan():
 
     # Mock PlannerAgent to avoid needing a real GROQ_API_KEY
     with (
+        patch("os.getenv", return_value="dummy_key"),
         patch("src.agents.planner.ChatGroq"),
         patch("src.agents.planner.PLANNER_PROMPT_TEMPLATE") as mock_prompt,
     ):
@@ -38,6 +39,9 @@ async def test_planner_agent_plan():
                 risk_level="low",
             )
         )
+
+        # Ensure the agent's internal attribute points to our mock chain
+        agent.structured_llm = mock_chain
 
         plan = await agent.plan(snapshot, balances)
 
